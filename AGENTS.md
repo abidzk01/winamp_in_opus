@@ -64,24 +64,22 @@ picked up, and only once files here are read.
 
 ## Build
 
-Prerequisites are **not vendored** and must exist beside the sources:
-
-- a 32-bit MinGW toolchain (`gcc`, `windres`, `make`) — the author uses
-  MinGW-w64/winlibs GCC 13.2 for the release build and TDM-GCC 5.1 for the
-  legacy build;
-- libopus + libogg + libopusfile built as the Makefile expects:
-  `oflto152/*.o` (release, LTO) or `oflto/*.o` (GCC 5) or `libopus152.a`
-  (debug), plus `logg/*.c` and an `opus/` include directory
-  (`#include <opus/opusfile.h>`, `-I./opus`).
+The third party libraries are **not vendored**. `scripts/build-deps.sh`
+downloads libopus 1.5.2 and libogg 1.3.2 and builds them into the layout the
+makefiles expect (`oflto152/*.o`, `logg/*.c`, `opus/`, `ogg/`, all ignored by
+git), so a fresh clone builds with:
 
 ```sh
+# once: needs curl, tar and a 32-bit gcc
+./scripts/build-deps.sh
+
 # release build (produces in_opus.dll)
 make
 
-# debug / static-analysis build (-Og -g -fanalyzer, links the .a lib)
+# debug / static-analysis build (-Og -g -fanalyzer, links libopus152.a)
 make -f Makefiledb
 
-# legacy GCC 5 build
+# legacy GCC 5 build (oflto/*.o)
 make -f MakefileGCC5
 
 # rebuild the vendored libopusfile objects
@@ -89,18 +87,29 @@ cd opusfile && ./makelib.bat
 
 # remove local objects and the DLL
 make clean
+
+# copy the DLL into the players listed in PLAYER_DIRS
+make install
 ```
+
+`make` only builds; `make install` copies `in_opus.dll` into the player folders
+named in `PLAYER_DIRS` (the author's own paths under
+`D:\Program Files\MediaPlayers\...`). A folder that does not exist is not an
+error, so the release build works on any machine.
+
+CI: `.github/workflows/build.yml` runs `scripts/build-deps.sh` and `make` on
+every push and pull request (artifact `in_opus`), and for every `v*` tag it also
+publishes a GitHub release with `in_opus.dll`, its checksum and `in_opus.txt`.
+The job refuses to publish when `in_opus.txt` and `in_opus.c` do not advertise
+the tagged version.
 
 Notes:
 
-- The `in_opus.dll` recipe ends with `cp` commands that install the DLL into the
-  author's own player folders under `D:\Program Files\MediaPlayers\...`. On any
-  other machine those copies fail **after** the DLL has been produced — that is
-  expected, or delete those recipe lines.
 - The DLL is linked with `-nostdlib`, `-mdll` and entry point `_DllMain@12`, so
   `DllMain` in `in_opus.c` must keep its exact `WINAPI` signature.
 - Do not commit build artifacts: `.o`, `.res`, `.a`, `*.dll`, or the external
-  library trees (`oflto*`, `logg`, `opus`). `.gitignore` covers them.
+  library trees (`oflto*`, `logg`, `opus`, `ogg`, `.deps`). `.gitignore` covers
+  them.
 - If `gcc`/`make`/`windres` are not installed, say so instead of guessing: the
   build cannot be verified in this workspace (checked: not on `PATH`).
 

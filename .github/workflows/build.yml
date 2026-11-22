@@ -1,0 +1,109 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  MSYSTEM: MINGW32
+  CHERE_INVOKING: 1
+
+jobs:
+  build:
+    name: Build in_opus.dll
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@v4
+
+      - name: Set up the 32-bit MinGW toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          install: >-
+            make
+            curl
+            tar
+            mingw-w64-i686-gcc
+
+      - name: Build libopus and libogg
+        run: ./scripts/build-deps.sh
+
+      - name: Check that the sources advertise the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if ! grep -q "(V${tag})" in_opus.txt; then
+            echo "::error::in_opus.txt does not advertise V${tag} in its banner"
+            exit 1
+          fi
+          if ! grep -q "v${tag}," in_opus.c; then
+            echo "::error::in_opus.c does not advertise v${tag} in about()"
+            exit 1
+          fi
+          echo "sources advertise $tag"
+
+      - name: Build the plug-in
+        run: make
+
+      - name: Inspect the DLL
+        run: |
+          ls -l in_opus.dll
+          objdump -p in_opus.dll | grep -E "DLL Name|winampGetInModule2|winampSetExtendedFileInfo|winampWriteExtendedFileInfo"
+
+      - name: Checksum
+        run: sha256sum in_opus.dll | tee in_opus.dll.sha256
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: in_opus
+          if-no-files-found: error
+          path: |
+            in_opus.dll
+            in_opus.dll.sha256
+            in_opus.txt
+
+  release:
+    name: Publish the GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the build
+        uses: actions/download-artifact@v4
+        with:
+          name: in_opus
+          path: dist
+
+      - name: Read the checksum
+        id: sum
+        run: echo "value=$(cut -d' ' -f1 dist/in_opus.dll.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: in_opus ${{ github.ref_name }}
+          fail_on_unmatched_files: true
+          body: |
+            Winamp 2.x/5.x input plug-in for Ogg Opus files, built from
+            `${{ github.ref_name }}`.
+
+            **Install**: copy `in_opus.dll` into the Winamp `Plugins` folder.
+            The complete documentation and changelog are in `in_opus.txt`.
+
+            `SHA256: ${{ steps.sum.outputs.value }}`
+          files: |
+            dist/in_opus.dll
+            dist/in_opus.dll.sha256
+            dist/in_opus.txt

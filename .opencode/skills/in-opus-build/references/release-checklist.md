@@ -67,6 +67,10 @@ git tag -a v0.915 -m "v0.915"
 git push origin main --follow-tags   # only when the user asks
 ```
 
+- Pushing the tag lets `.github/workflows/build.yml` build the DLL and publish
+  the GitHub release with `in_opus.dll`, `in_opus.dll.sha256` and `in_opus.txt`
+  attached, so nothing has to be uploaded by hand. The job fails before building
+  when `in_opus.txt` and `in_opus.c` do not advertise the tagged version, so bump
+  both before tagging.
 - Release notes on GitHub summarise the changelog; keep them in English.
-- Attach `in_opus.dll` (and `in_opus.txt`, which is the distributable readme) to
-  the release; never commit those artifacts to the repository.
+- Never commit the built `in_opus.dll` or the library trees.

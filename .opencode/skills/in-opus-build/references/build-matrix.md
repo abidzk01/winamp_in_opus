@@ -17,6 +17,10 @@ Targets common to the makefiles: `in_opus.dll`, the object files
 
 ## Prerequisites (not in the repository)
 
+`scripts/build-deps.sh` builds all of this in one go (libopus 1.5.2 and libogg
+1.3.2), so a fresh clone only needs a 32-bit GCC, `windres`, `make`, `curl` and
+`tar`:
+
 - 32-bit GCC plus `windres` and `make` on `PATH`.
 - `opus/` include directory containing `opusfile.h` (and its `opus/` deps) —
   referenced as `#include <opus/opusfile.h>` with `-I./opus`.
@@ -26,6 +30,9 @@ Targets common to the makefiles: `in_opus.dll`, the object files
   - `libopus152.a` for the debug builds,
   - `logg/*.c` (libogg sources) compiled into the DLL.
 - `resource.o` is produced by `windres resource.rc resource.o`.
+
+The script fills `oflto152/`, `logg/`, `opus/` and `ogg/`; it does not produce
+`oflto/*.o` or `libopus152.a`, which only the GCC 5 and debug makefiles need.
 
 ## Common failures
 
