@@ -37,8 +37,8 @@ LDFLAGS+= -Wl,-s,-dynamicbase \
     -Wl,--enable-auto-import \
     -Wl,--disable-stdcall-fixup
 
-in_opus.dll: in_opus.o resample.o infobox.o http.o wspiapi.o resource.o
-	$(CC) -o in_opus.dll in_opus.o resample.o infobox.o http.o wspiapi.o resource.o\
+in_opus.dll: in_opus.o resample.o infobox.o tagwrite.o albumart.o http.o wspiapi.o resource.o
+	$(CC) -o in_opus.dll in_opus.o resample.o infobox.o tagwrite.o albumart.o http.o wspiapi.o resource.o\
 	 oflto/*.o opusfile/*.c logg/*.c -e_DllMain@12 -mdll $(LDFLAGS) $(CFLAGS)
 
 	cp in_opus.dll "D:\Program Files\MediaPlayers\Winamp\Plugins"
@@ -52,6 +52,10 @@ in_opus.dll: in_opus.o resample.o infobox.o http.o wspiapi.o resource.o
 
 in_opus.o : in_opus.c infobox.h resample.h resource.h
 	$(CC) -c in_opus.c $(CFLAGS)
+tagwrite.o : tagwrite.c tagwrite.h
+	$(CC) -c tagwrite.c $(CFLAGS)
+albumart.o : albumart.c albumart.h
+	$(CC) -c albumart.c $(CFLAGS)
 infobox.o : infobox.c infobox.h utf_ansi.c
 	$(CC) -c infobox.c $(CFLAGS)
 resource.o: resource.rc

@@ -1,6 +1,18 @@
 # in_opus
 Winamp 2.x and 5.x input plugin for Opus file
 
+== THIS IS A FORK ==
+
+This repository is a fork of https://github.com/RamonUnch/in_opus, which is no
+longer maintained. It carries on from the original 0.914 release with the fixes
+and features listed in the changelog of `in_opus.txt`: tag editing, the complete
+tag list in the info box, and the embedded cover art shown in Winamp's own
+Album Art window and File Info dialog.
+
+The original work, the design and most of this code are by Raymond Gillibert
+(RamonUnch). Please report issues and pull requests for this fork here, not
+upstream.
+
 
 == PURPOSE ==
 
@@ -43,6 +55,11 @@ Compiled using gcc 13.2, (MinGW64 / winlibs.com) on Windows Server 2003
   displaying the content of the "DESCRIPTION" tag, used by youtube-dl
   for the video comment when using the --add-metadata switch.
 
+* The info box also lists every remaining Vorbis comment and shows the
+  embedded cover art, and on Winamp 5.5+ the unified "File info" dialog can
+  write the tags back into the file. The cover art itself is also shown by
+  Winamp (Album Art window and artwork pane), and can be changed there.
+
 * Full replaygain support.
 
 * Output at any rate from 1-192kHz, since v0.777,
@@ -58,10 +75,14 @@ Compiled using gcc 13.2, (MinGW64 / winlibs.com) on Windows Server 2003
 
 == LIMITATIONS ==
 
-I did not want to lose time so there are some limitations,
-they may change in the future if I continue the project.
+The original plug-in deliberately left a few things out; this fork keeps the
+limitations below and fixes the tag and cover art handling.
 
-* No way to edit tags.
+* Tags and cover art can only be edited through Winamp 5.5+'s "File info"
+  dialog; the plug-in's own info box (UNIFIED_DIALOG=0) is read only. The
+  album art provider itself needs Winamp 5.12 or later.
+
+* Deleting artwork removes every embedded picture, whatever its type.
 
 * UTF-8 is not really supported under Win9x; all tags are converted
   to Windows-1252 for display  Thus you will not have all the Unicode
@@ -70,3 +91,6 @@ they may change in the future if I continue the project.
 
 * In the Winamp playlist only the filename/URL will be visible.
   Since v0.911 proper format will be shown in the PL on Winamp 5.x
+
+This fork is maintained at https://github.com/abidzk01/winamp_in_opus, because
+https://github.com/RamonUnch/in_opus is no longer maintained.

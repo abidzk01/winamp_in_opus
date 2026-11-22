@@ -34,6 +34,8 @@ an API is missing on old Windows the project either ships its own implementation
 | ---- | ---- |
 | `in_opus.c` | Main plugin: `In_Module` definition, decode thread, seeking, replaygain, `winamp.ini [IN_OPUS]` options, file/stream detection |
 | `infobox.c/.h` | "File info" (Alt+3) tag dialog; `#include "utf_ansi.c"` |
+| `tagwrite.c/.h` | Rewrites the OpusTags header (Vorbis comments) in place, used by the tag write API |
+| `albumart.c/.h` | Wasabi album art provider: Winamp's Album Art window and File Info dialog read (and change) the embedded cover through it |
 | `utf_ansi.c` | UTF-8 ⇄ UTF-16 conversion written for old Windows (no CRT wide-char calls) |
 | `resample.c/.h` | Speex-derived resampler (`speex_resampler_*`) |
 | `http.c/.h` | HTTP client derived from libopusfile's `http.c`, adapted for Win9x/NT (`OP_ENABLE_HTTP 1`) |
@@ -118,6 +120,11 @@ Full rules: `.opencode/rules/30-c-conventions.md`. The essentials:
 - `opusfile/`, `in2.h`, `wa_ipc.h`, `http.c`, `resample.c` and `wspiapi.c` come
   from upstream projects: touch them only when a fix requires it, keep the
   upstream style, and mention the change in the commit body.
+- `albumart.c` declares the handful of Winamp Wasabi interfaces it needs, because
+  the SDK headers are not part of this repository. The dispatch functions use
+  `__attribute__((thiscall))`, which is required by the Winamp ABI: a "dispatch"
+  function must pop its four stack arguments itself. Check for `ret $0x10` in the
+  disassembly before changing those signatures.
 
 ## Versioning and release
 

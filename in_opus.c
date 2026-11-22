@@ -14,6 +14,7 @@
 #include <limits.h>
 #include "resource.h"
 #include "infobox.h"
+#include "albumart.h"
 #include "in2.h"
 #include "wa_ipc.h"
 #include "resample.h"
@@ -134,7 +135,7 @@ void config(HWND hwndParent)
 void about(HWND hwndParent)
 {
     MessageBox(hwndParent,
-    "OPUS File Player v0.914, by Raymond Gillibert (*.opus, *.opu files).\n"
+    "OPUS File Player v0.915, by Raymond Gillibert (*.opus, *.opu files).\n"
     "Using libopus 1.5.2, libogg 1.3.2 and libopusfile 0.12.\n"
     "You can write me at raymond_gillibert@yahoo.fr if necessary."
     , "About Winamp OPUS Player",MB_OK);
@@ -310,6 +311,7 @@ void init()
     ini_name[0] = rez[0] = font_str[0] = '\0';
 
     VIS_BROKEN=1;
+    albumart_register(mod.hMainWindow);   // cover art in Winamp's own UI
     winamp_version = SendMessage(mod.hMainWindow, WM_WA_IPC, 0, IPC_GETVERSION);
 
     if(winamp_version >= 0x5011){
@@ -390,6 +392,7 @@ static void first_init(char *Fstr, int *Fnth)
 // Called when winanmp quits...
 void quit()
 {
+    albumart_unregister();
     op_free(_of); // Just in case
 }
 
@@ -1092,7 +1095,7 @@ DWORD WINAPI DecodeThread(LPVOID b)
 static In_Module mod =
 {
     IN_VER, // defined in IN2.H
-    "OPUS Player v0.914 by Raymond",
+    "OPUS Player v0.915 by Raymond",
     0,      // hMainWindow (filled in by winamp)
     0,      // hDllInstance (filled in by winamp)
     "OPUS\0OPUS Audio File (*.OPUS)\0OPU\0Opus Audio File (*.OPU)\0",

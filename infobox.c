@@ -8,6 +8,7 @@
 #include <opus/opusfile.h>
 #include "resource.h"
 #include "infobox.h"
+#include "tagwrite.h"
 
 extern HFONT TAGS_FONT; // To set the font
 extern char USE_REPLAY_GAIN; // 0 : no, 1: Album, 2: Track.
@@ -177,6 +178,7 @@ static void SetFonts(HWND hwnd,HFONT fonte)
         SendDlgItemMessage(hwnd, IDC_DESCRIPTION,WM_SETFONT, newfont, TRUE);
         SendDlgItemMessage(hwnd, IDC_COPYRIGHT,  WM_SETFONT, newfont, TRUE);
         SendDlgItemMessage(hwnd, IDC_TRACKTOTAL, WM_SETFONT, newfont, TRUE);
+        SendDlgItemMessage(hwnd, IDC_EXTRATAGS,  WM_SETFONT, newfont, TRUE);
     }
 }
 static const char *GetRGmode(char use_replay_gain)
@@ -185,6 +187,419 @@ static const char *GetRGmode(char use_replay_gain)
         { "Off", "Album", "Track", "Auto", "Null", "Off" };
     return table[ (size_t)use_replay_gain < countof(table) ? use_replay_gain : 0 ];
 }
+
+/***************************************
+ *  Tag name mapping                   *
+ ***************************************/
+/* Winamp queries the input plug-in for a fixed set of metadata names ("title",
+   "albumartist", "year", ...). Some of those names differ from the Vorbis
+   comment field that holds the same information, and several taggers use more
+   than one spelling, so map a name onto an ordered list of candidates. Names
+   that are not listed here are looked up as they are, which already covers
+   every field whose Vorbis name matches the Winamp name. */
+static const char *const *meta_candidates(const char *data)
+{
+    static const char *const date[]        = { "DATE", "YEAR", NULL };
+    static const char *const track[]       = { "TRACKNUMBER", "TRACK", NULL };
+    static const char *const disc[]        = { "DISCNUMBER", "DISC", NULL };
+    static const char *const albumartist[] = { "ALBUMARTIST", "ALBUM_ARTIST", "ALBUM ARTIST", NULL };
+    static const char *const artists[]     = { "ARTISTS", "ARTIST", NULL };
+    static const char *const totaltracks[] = { "TRACKTOTAL", "TOTALTRACKS", NULL };
+    static const char *const totaldiscs[]  = { "DISCTOTAL", "TOTALDISCS", NULL };
+    static const char *const publisher[]   = { "PUBLISHER", "LABEL", "ORGANIZATION", NULL };
+    static const char *const label[]       = { "LABEL", "PUBLISHER", "ORGANIZATION", NULL };
+    static const char *const encoder[]     = { "ENCODER", "ENCODEDBY", "ENCODED-BY", NULL };
+    static const char *const lyrics[]      = { "LYRICS", "UNSYNCEDLYRICS", "UNSYNCHRONISEDLYRICS", NULL };
+    static const char *const url[]         = { "PURL", "WEBSITE", "URL", NULL };
+    static const struct { const char *name; const char *const *cand; } MAP[] = {
+        { "date",        date        }, { "year",        date        },
+        { "track",       track       }, { "tracknumber", track       },
+        { "disc",        disc        }, { "discnumber",  disc        },
+        { "albumartist", albumartist }, { "artists",     artists     },
+        { "totaltracks", totaltracks }, { "tracktotal",  totaltracks },
+        { "ntracks",     totaltracks },
+        { "totaldiscs",  totaldiscs  }, { "disctotal",   totaldiscs  },
+        { "publisher",   publisher   }, { "label",       label       },
+        { "encoder",     encoder     }, { "encodedby",   encoder     },
+        { "lyrics",      lyrics      },
+        { "url",         url         }, { "purl",        url         }
+    };
+    size_t i;
+
+    for (i = 0; i < countof(MAP); i++)
+        if (!_stricmp(data, MAP[i].name)) return MAP[i].cand;
+    return NULL;
+}
+
+/* The Vorbis comment field a Winamp metadata name is written to. Returning
+   NULL means the field cannot be written, which makes Winamp grey it out. */
+static const char *meta_write_key(const char *data)
+{
+    static const struct { const char *name; const char *key; } W[] = {
+        { "title",        "TITLE"        }, { "artist",       "ARTIST"       },
+        { "album",        "ALBUM"        }, { "albumartist",  "ALBUMARTIST"  },
+        { "year",         "DATE"         }, { "date",         "DATE"         },
+        { "genre",        "GENRE"        }, { "comment",      "COMMENT"      },
+        { "track",        "TRACKNUMBER"  }, { "tracknumber",  "TRACKNUMBER"  },
+        { "totaltracks",  "TRACKTOTAL"   }, { "tracktotal",   "TRACKTOTAL"   },
+        { "disc",         "DISCNUMBER"   }, { "discnumber",   "DISCNUMBER"   },
+        { "totaldiscs",   "DISCTOTAL"    }, { "disctotal",    "DISCTOTAL"    },
+        { "composer",     "COMPOSER"     }, { "conductor",    "CONDUCTOR"    },
+        { "performer",    "PERFORMER"    }, { "lyricist",     "LYRICIST"     },
+        { "lyrics",       "LYRICS"       }, { "copyright",    "COPYRIGHT"    },
+        { "publisher",    "PUBLISHER"    }, { "label",        "LABEL"        },
+        { "bpm",          "BPM"          }, { "isrc",         "ISRC"         },
+        { "language",     "LANGUAGE"     }, { "description",  "DESCRIPTION"  },
+        { "encoder",      "ENCODER"      }, { "encodedby",    "ENCODER"      },
+        { "url",          "PURL"         }, { "purl",         "PURL"         },
+        { "media",        "MEDIA"        }, { "script",       "SCRIPT"       },
+        { "releasetype",  "RELEASETYPE"  }, { "releasestatus","RELEASESTATUS"},
+        { "releasecountry","RELEASECOUNTRY" },
+        { "catalognumber","CATALOGNUMBER" }, { "barcode",     "BARCODE"     },
+        { "originaldate", "ORIGINALDATE" }
+    };
+    size_t i;
+
+    for (i = 0; i < countof(W); i++)
+        if (!_stricmp(data, W[i].name)) return W[i].key;
+    return NULL;
+}
+
+/***************************************
+ *  Embedded cover art                 *
+ ***************************************/
+/* gdiplus.dll appears with Windows XP, ole32.dll everywhere. Both are loaded
+   at run time so the plug-in keeps no import on them and simply shows no
+   picture on the older systems. */
+typedef int     (WINAPI *PGDIPSTARTUP)(ULONG_PTR *, const void *, void *);
+typedef void    (WINAPI *PGDIPSHUTDOWN)(ULONG_PTR);
+typedef int     (WINAPI *PGDIPCREATEBITMAPFROMSTREAM)(void *, void **);
+typedef int     (WINAPI *PGDIPCREATEHBITMAPFROMBITMAP)(void *, HBITMAP *, unsigned int);
+typedef int     (WINAPI *PGDIPDISPOSEIMAGE)(void *);
+typedef HRESULT (WINAPI *PCREATESTREAMONHGLOBAL)(HGLOBAL, BOOL, void **);
+typedef ULONG   (WINAPI *PCOMRELEASE)(void *);
+
+static HBITMAP COVER_BITMAP = NULL; /* scaled copy shown in the dialog */
+
+/* Decode an in-memory JPEG/PNG/GIF into a bitmap. */
+static HBITMAP bitmap_from_memory(const unsigned char *data, size_t len)
+{
+    HINSTANCE hGdip = NULL, hOle = NULL;
+    PGDIPSTARTUP startup = NULL;
+    PGDIPSHUTDOWN shutdown = NULL;
+    PGDIPCREATEBITMAPFROMSTREAM create_from_stream = NULL;
+    PGDIPCREATEHBITMAPFROMBITMAP create_hbitmap = NULL;
+    PGDIPDISPOSEIMAGE dispose_image = NULL;
+    PCREATESTREAMONHGLOBAL create_stream = NULL;
+    struct { unsigned int version; void *callback; int no_thread; int no_codecs; } si;
+    ULONG_PTR token = 0;
+    void *stream = NULL, *bitmap = NULL;
+    HGLOBAL mem;
+    HBITMAP ret = NULL;
+
+    if (!data || len == 0 || len > 32u * 1024u * 1024u) return NULL;
+
+    hGdip = LoadLibraryA("gdiplus.dll");
+    hOle  = LoadLibraryA("ole32.dll");
+    if (!hGdip || !hOle) goto done;
+
+    startup           = (PGDIPSTARTUP)(void *)GetProcAddress(hGdip, "GdiplusStartup");
+    shutdown          = (PGDIPSHUTDOWN)(void *)GetProcAddress(hGdip, "GdiplusShutdown");
+    create_from_stream= (PGDIPCREATEBITMAPFROMSTREAM)(void *)GetProcAddress(hGdip, "GdipCreateBitmapFromStream");
+    create_hbitmap    = (PGDIPCREATEHBITMAPFROMBITMAP)(void *)GetProcAddress(hGdip, "GdipCreateHBITMAPFromBitmap");
+    dispose_image     = (PGDIPDISPOSEIMAGE)(void *)GetProcAddress(hGdip, "GdipDisposeImage");
+    create_stream     = (PCREATESTREAMONHGLOBAL)(void *)GetProcAddress(hOle, "CreateStreamOnHGlobal");
+    if (!startup || !shutdown || !create_from_stream || !create_hbitmap
+        || !dispose_image || !create_stream)
+        goto done;
+
+    si.version = 1;
+    si.callback = NULL;
+    si.no_thread = 0;
+    si.no_codecs = 0;
+    if (startup(&token, &si, NULL) != 0) goto done;
+
+    mem = GlobalAlloc(GMEM_MOVEABLE, len);
+    if (mem) {
+        void *p = GlobalLock(mem);
+        if (p) {
+            memcpy(p, data, len);
+            GlobalUnlock(mem);
+            if (create_stream(mem, TRUE, &stream) == 0 && stream) {
+                if (create_from_stream(stream, &bitmap) == 0 && bitmap) {
+                    if (create_hbitmap(bitmap, &ret, 0xFFFFFFFFu) != 0) ret = NULL;
+                    dispose_image(bitmap);
+                }
+                /* IUnknown::Release lives in slot 2 of the vtable */
+                ((PCOMRELEASE)(((void ***)stream)[0][2]))(stream);
+            } else {
+                GlobalFree(mem);
+            }
+        } else {
+            GlobalFree(mem);
+        }
+    }
+    shutdown(token);
+
+done:
+    if (hGdip) FreeLibrary(hGdip);
+    if (hOle)  FreeLibrary(hOle);
+    return ret;
+}
+
+/* Scale a bitmap to fit the static control and hand it to that control. */
+static void set_cover_bitmap(HWND hwnd, HBITMAP src)
+{
+    HWND ctrl = GetDlgItem(hwnd, IDC_COVER);
+    HBITMAP scaled = NULL;
+    RECT rc;
+
+    if (COVER_BITMAP) { DeleteObject(COVER_BITMAP); COVER_BITMAP = NULL; }
+    if (ctrl) SendMessage(ctrl, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)NULL);
+    if (!ctrl || !src) return;
+
+    if (GetClientRect(ctrl, &rc) && rc.right > 0 && rc.bottom > 0) {
+        BITMAP bm;
+        HDC hdcScreen;
+
+        if (GetObject(src, sizeof(bm), &bm) && bm.bmWidth > 0 && bm.bmHeight > 0) {
+            int cx = rc.right, cy = rc.bottom, dw, dh;
+
+            if ((LONGLONG)bm.bmWidth * cy > (LONGLONG)bm.bmHeight * cx) {
+                dw = cx;
+                dh = (int)((LONGLONG)bm.bmHeight * cx / bm.bmWidth);
+            } else {
+                dh = cy;
+                dw = (int)((LONGLONG)bm.bmWidth * cy / bm.bmHeight);
+            }
+            if (dw < 1) dw = 1;
+            if (dh < 1) dh = 1;
+
+            hdcScreen = GetDC(NULL);
+            if (hdcScreen) {
+                HDC hdcSrc = CreateCompatibleDC(hdcScreen);
+                HDC hdcDst = CreateCompatibleDC(hdcScreen);
+                if (hdcSrc && hdcDst) {
+                    HGDIOBJ oldSrc = SelectObject(hdcSrc, src);
+                    scaled = CreateCompatibleBitmap(hdcScreen, cx, cy);
+                    if (scaled) {
+                        HGDIOBJ oldDst = SelectObject(hdcDst, scaled);
+                        HBRUSH back = (HBRUSH)(COLOR_BTNFACE + 1);
+                        RECT all;
+                        all.left = 0; all.top = 0; all.right = cx; all.bottom = cy;
+                        FillRect(hdcDst, &all, back);
+                        SetStretchBltMode(hdcDst, HALFTONE);
+                        SetBrushOrgEx(hdcDst, 0, 0, NULL);
+                        StretchBlt(hdcDst, (cx - dw) / 2, (cy - dh) / 2, dw, dh,
+                                   hdcSrc, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+                        SelectObject(hdcDst, oldDst);
+                    }
+                    SelectObject(hdcSrc, oldSrc);
+                }
+                if (hdcSrc) DeleteDC(hdcSrc);
+                if (hdcDst) DeleteDC(hdcDst);
+                ReleaseDC(NULL, hdcScreen);
+            }
+        }
+    }
+    if (scaled) {
+        SendMessage(ctrl, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)scaled);
+        COVER_BITMAP = scaled;
+    }
+}
+
+/* Find the front cover of the file (if any) and show it. */
+static void set_cover_from_tags(HWND hwnd, const OpusTags *_tags)
+{
+    OpusPictureTag pic;
+    int count, i, found = 0;
+
+    set_cover_bitmap(hwnd, NULL);
+    if (!_tags) return;
+
+    opus_picture_tag_init(&pic);
+    count = opus_tags_query_count(_tags, "METADATA_BLOCK_PICTURE");
+    for (i = 0; i < count; i++) {
+        const char *tag = opus_tags_query(_tags, "METADATA_BLOCK_PICTURE", i);
+        if (!tag) continue;
+        if (opus_picture_tag_parse(&pic, tag) < 0) {
+            opus_picture_tag_clear(&pic);
+            opus_picture_tag_init(&pic);
+            continue;
+        }
+        if (pic.type == 3 || count == 1) { found = 1; break; }
+        opus_picture_tag_clear(&pic);      /* not the front cover: try the next one */
+        opus_picture_tag_init(&pic);
+    }
+
+    if (found && pic.data && pic.data_length) {
+        HBITMAP bm = bitmap_from_memory(pic.data, pic.data_length);
+        if (bm) {
+            set_cover_bitmap(hwnd, bm);
+            DeleteObject(bm);
+        }
+    }
+    opus_picture_tag_clear(&pic);
+}
+
+/***************************************
+ *  Every tag, as text                 *
+ ***************************************/
+/* The dialog has room for the fields Winamp knows about; this fills the side
+   list with the complete comment set so nothing is hidden. */
+static void SetExtraTags(HWND hwnd, const OpusTags *_tags)
+{
+    size_t cap = 256 * 1024, used = 0;
+    char *buf;
+    int i;
+
+    if (!_tags || !_tags->comments) return;
+
+    buf = (char *)malloc(cap);
+    if (!buf) return;
+    buf[0] = '\0';
+
+    for (i = 0; i < _tags->comments; i++) {
+        const char *c = _tags->user_comments[i];
+        int len = _tags->comment_lengths[i];
+        const char *eq;
+        size_t klen, need;
+
+        if (!c || len <= 0) continue;
+        eq = (const char *)memchr(c, '=', (size_t)len);
+        klen = eq ? (size_t)(eq - c) : (size_t)len;
+
+        if (klen == 21 && !_strnicmp(c, "METADATA_BLOCK_PICTURE", 21)) {
+            /* never dump megabytes of base64 into the control */
+            OpusPictureTag pic;
+            char line[192];
+            opus_picture_tag_init(&pic);
+            if (eq && opus_picture_tag_parse(&pic, eq + 1) >= 0) {
+                _snprintf(line, sizeof(line),
+                          "METADATA_BLOCK_PICTURE = %s %lux%lu, %lu bytes, type %ld\n",
+                          pic.mime_type ? pic.mime_type : "image",
+                          (unsigned long)pic.width, (unsigned long)pic.height,
+                          (unsigned long)pic.data_length, (long)pic.type);
+                opus_picture_tag_clear(&pic);
+            } else {
+                _snprintf(line, sizeof(line), "METADATA_BLOCK_PICTURE = <%d bytes>\n", len);
+            }
+            need = strlen(line);
+            if (used + need + 1 >= cap) break;
+            memcpy(buf + used, line, need);
+            used += need;
+            buf[used] = '\0';
+            continue;
+        }
+
+        need = (size_t)len;
+        if (used + need + 2 >= cap) break;
+        memcpy(buf + used, c, need);
+        used += need;
+        buf[used++] = '\n';
+        buf[used] = '\0';
+    }
+    if (used + 16 >= cap) lstrcat_sA(buf, cap, "\n... (truncated)");
+
+    {   /* the dialog needs DOS line ends, including inside multi line values */
+        char *dos = unix2dos(buf);
+        SetTextStr(hwnd, IDC_EXTRATAGS, dos);
+        free(dos);
+    }
+    free(buf);
+}
+
+/***************************************
+ *  Tag editing (Winamp write API)     *
+ ***************************************/
+/* Winamp calls winampSetExtendedFileInfo() once per changed field and then
+   winampWriteExtendedFileInfo() once, so the edits are gathered here and
+   applied to the file in a single pass. */
+#define MAX_PENDING_EDITS 64
+static char *PENDING_KEY[MAX_PENDING_EDITS];
+static char *PENDING_VAL[MAX_PENDING_EDITS];
+static int   PENDING_N = 0;
+static char  PENDING_FILE[4 * MAX_PATH];  /* UTF-8 name of the file being edited */
+
+static char *dup_str(const char *s)
+{
+    size_t n;
+    char *p;
+
+    if (!s) s = "";
+    n = strlen(s) + 1;
+    p = (char *)malloc(n);
+    if (p) memcpy(p, s, n);
+    return p;
+}
+
+static void pending_clear(void)
+{
+    int i;
+
+    for (i = 0; i < PENDING_N; i++) {
+        free(PENDING_KEY[i]);
+        free(PENDING_VAL[i]);
+        PENDING_KEY[i] = NULL;
+        PENDING_VAL[i] = NULL;
+    }
+    PENDING_N = 0;
+    PENDING_FILE[0] = '\0';
+}
+
+static int set_extended_file_info(const char *fn, const char *data, const char *val)
+{
+    const char *key;
+    int i;
+
+    if (!fn || !*fn || !data || !*data) return 0;
+    if (isURL(fn)) return 0;
+
+    key = meta_write_key(data);
+    if (!key) return 0;                    /* Winamp then keeps the field read only */
+
+    if (!PENDING_FILE[0] || _stricmp(PENDING_FILE, fn) != 0) {
+        pending_clear();
+        lstrcpy_sA(PENDING_FILE, sizeof(PENDING_FILE), fn);
+    }
+    for (i = 0; i < PENDING_N; i++) {      /* keep only the last value of a field */
+        if (!_stricmp(PENDING_KEY[i], key)) {
+            char *v = dup_str(val);
+            if (!v) return 0;
+            free(PENDING_VAL[i]);
+            PENDING_VAL[i] = v;
+            return 1;
+        }
+    }
+    if (PENDING_N >= MAX_PENDING_EDITS) return 0;
+
+    PENDING_KEY[PENDING_N] = dup_str(key);
+    PENDING_VAL[PENDING_N] = dup_str(val);
+    if (!PENDING_KEY[PENDING_N] || !PENDING_VAL[PENDING_N]) {
+        free(PENDING_KEY[PENDING_N]);
+        free(PENDING_VAL[PENDING_N]);
+        return 0;
+    }
+    PENDING_N++;
+    return 1;
+}
+
+static int write_extended_file_info(void)
+{
+    OpusTagEdit edits[MAX_PENDING_EDITS];
+    int i, ok;
+
+    if (PENDING_N <= 0 || !PENDING_FILE[0]) { pending_clear(); return 0; }
+
+    for (i = 0; i < PENDING_N; i++) {
+        edits[i].key = PENDING_KEY[i];
+        edits[i].val = PENDING_VAL[i];      /* "" asks for the field to be removed */
+    }
+    ok = opus_write_tags(PENDING_FILE, edits, PENDING_N);
+    if (ok) pending_clear();
+    return ok;
+}
+
 /*************************************
  * Infobox Initialisation for files  *
  *************************************/
@@ -330,6 +745,12 @@ static BOOL InitInfoboxInfo(HWND hwnd, const char *file)
 
     /* END OF TAGS */
 
+    /* the complete comment list and the embedded cover art */
+    if (!file_is_url) {
+        SetExtraTags(hwnd, _tags);
+        set_cover_from_tags(hwnd, _tags);
+    }
+
     ret=TRUE; goto FREALL; // if we are here everything is good.
 
     FAIL: ret=FALSE;
@@ -354,7 +775,9 @@ static INT_PTR CALLBACK InfoProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             return TRUE;
 
         /* If Destroy message is sent */
-        case WM_DESTROY: break;
+        case WM_DESTROY:
+            if (COVER_BITMAP) { DeleteObject(COVER_BITMAP); COVER_BITMAP = NULL; }
+            break;
 
         /* A Command is sent */
         case WM_COMMAND:
@@ -491,21 +914,25 @@ int winampGetExtendedFileInfo_utf8(const char *fn, const char *data, char *dest,
 
     } else if (!_stricmp(data, "comment")) { // convert to DOS
         char *dos;
-        z = opus_tags_query(_tags, "DESCRIPTION", 0);
+        z = opus_tags_query(_tags, "COMMENT", 0);
+        if (!z || !*z) z = opus_tags_query(_tags, "DESCRIPTION", 0);
         dos = unix2dos(z);
         if(!dos) goto fail;
         lstrcpy_sA(dest, destlen-1, dos);
         free(dos);
         goto finish;
 
-    } else if (!_stricmp(data, "year")) {
-        z = opus_tags_query(_tags, "DATE", 0);
-    } else if (!_stricmp(data, "track")) {
-        z = opus_tags_query(_tags, "TRACKNUMBER", 0);
-    } else if (!_stricmp(data, "disc")) {
-        z = opus_tags_query(_tags, "DISCNUMBER", 0);
     } else {
-        z = opus_tags_query(_tags, data, 0);
+        const char *const *cand = meta_candidates(data);
+        if (cand) {
+            int i;
+            for (i = 0; cand[i] && !z; i++) {
+                const char *v = opus_tags_query(_tags, cand[i], 0);
+                if (v && *v) z = v;
+            }
+        } else {
+            z = opus_tags_query(_tags, data, 0);
+        }
     }
     if (z) {
        lstrcpy_sA(dest, destlen-1, z);
@@ -609,13 +1036,20 @@ __declspec(dllexport) int winampUseUnifiedFileInfoDlg(const wchar_t *fn)
 }
 __declspec(dllexport) int winampSetExtendedFileInfoW(const wchar_t *fn, const char *data, const wchar_t *val)
 {
-  return 0;
+    char *fn8  = fn  ? utf16_to_utf8(fn)  : NULL;
+    char *val8 = val ? utf16_to_utf8(val) : dup_str("");
+    int ret = 0;
+
+    if (fn8 && val8) ret = set_extended_file_info(fn8, data, val8);
+    free(fn8);
+    free(val8);
+    return ret;
 }
 __declspec(dllexport) int winampSetExtendedFileInfo(const char *fn, const char *data, const char *val)
 {
-  return 0;
+    return set_extended_file_info(fn, data, val);
 }
 __declspec(dllexport) int winampWriteExtendedFileInfo()
 {
-  return 0;
+    return write_extended_file_info();
 }

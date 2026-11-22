@@ -11,7 +11,7 @@
 // File Info Dialog
 //
 
-IDD_INFOBOX DIALOG DISCARDABLE  0, 0, 211, 257
+IDD_INFOBOX DIALOG DISCARDABLE  0, 0, 320, 257
 
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 FONT 8, "MS Shell Dlg"
@@ -34,7 +34,7 @@ BEGIN
 
     RTEXT           "&Date",IDC_STATIC,8,98,31,8
     EDITTEXT        IDC_YEAR,43, 96, 64, 12,ES_AUTOHSCROLL | ES_READONLY
-    RTEXT           "Track &N°",IDC_STATIC,111, 98, 32, 8
+    RTEXT           "Track &Nï¿½",IDC_STATIC,111, 98, 32, 8
     EDITTEXT        IDC_TRACK,146, 96, 24, 12,ES_AUTOHSCROLL | ES_READONLY
     RTEXT           "o&f",IDC_STATIC,172, 98, 8, 8
     EDITTEXT        IDC_TRACKTOTAL,183, 96, 24, 12,ES_AUTOHSCROLL | ES_READONLY
@@ -55,13 +55,18 @@ BEGIN
     EDITTEXT        IDC_DESCRIPTION,3, 166, 205, 72, ES_MULTILINE | ES_READONLY | WS_VSCROLL
     LTEXT           "",IDC_ENCODER,54,240,161,18
     DEFPUSHBUTTON   "OK",IDOK,2,242,50,14
+
+    GROUPBOX        " Cover art ",IDC_STATIC,213,30,104,118
+    LTEXT           "",IDC_COVER,216,40,98,102,SS_BITMAP | SS_CENTERIMAGE
+    GROUPBOX        " All tags ",IDC_STATIC,213,152,104,88
+    EDITTEXT        IDC_EXTRATAGS,216,163,98,74,ES_MULTILINE | ES_READONLY | WS_VSCROLL
 END
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Version
 //
-#define OPUS_VERSION 0,9,1,4
+#define OPUS_VERSION 0,9,1,5
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION OPUS_VERSION
@@ -75,12 +80,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Gillibert Software"
             VALUE "FileDescription", "Opus File decoder plugin for Winamp 2+"
-            VALUE "FileVersion", "0,9,1,4"
+            VALUE "FileVersion", "0,9,1,5"
             VALUE "InternalName", "in_opus.dll"
             VALUE "LegalCopyright", "De mes deux"
             VALUE "OriginalFilename", "in_opus.dll"
             VALUE "ProductName", "Opus input plugin"
-            VALUE "ProductVersion", "0,9,1,4"
+            VALUE "ProductVersion", "0,9,1,5"
         END
     END
     BLOCK "VarFileInfo"

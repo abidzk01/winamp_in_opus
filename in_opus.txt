@@ -1,6 +1,6 @@
  /-------------------------------------------------------------------------\
-/              OPUS FILE DECODER PLUGIN FOR WINAMP 2+ (V0.914)              \
-|                         RELEASED NOVEMBER 6, 2025                         |
+/              OPUS FILE DECODER PLUGIN FOR WINAMP 2+ (V0.915)              \
+|                        RELEASED NOVEMBER 22, 2026                        |
 +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 | Author: Raymond Gillibert.                                                |
 | You can write me to the e-mail address raymond_gillibert at yahoo fr      |
@@ -77,7 +77,10 @@ Compiled using gcc 13.2, (MinGW64 / winlibs.com) on Windows Server 2003
 I did not want to lose time so there are some limitations,
 they may change in the future if I continue the project.
 
-* No way to edit tags.
+* Tags and cover art can only be edited through Winamp 5.5+'s "File info"
+  dialog; the plug-in's own info box (UNIFIED_DIALOG=0) is read only. The
+  album art provider itself needs Winamp 5.12+, older versions show no
+  artwork.
 
 * UTF-8 is not really supported under Win9x; all tags are converted to
   the local codepage for display. Thus you will not have all the Unicode
@@ -152,7 +155,7 @@ for all versions is to enable dithering. Disabling it may slightly decrease
 sound quality but will speed up decoding. Useful if you have a slow CPU.
 
 TAGS_DISPLAY_MODE. Set it to 0 to dump the raw utf8 string in the
-dialog, hence the character '�' will be displayed as 'é', not very nice.
+dialog, hence the character '�' will be displayed as 'é', not very nice.
 Set it to 1 to force the UTF8 -> ANSI conversion and set it to 2 to force
 the Full Unicode support (UTF-8 -> UTF16). This requires NT. by default the
 value is 3 meaning the program will automatically use full Unicode support
@@ -223,6 +226,35 @@ FORMAT_TITLE=0 then only the filename willbe displayed in the playmist.
 =============================================================================
 == CHANGELOG                                                               ==
 =============================================================================
+
+== UPDATE 0.915 ==
+
+* NEW: Tags can be edited from Winamp's "File info" dialog (Alt+3) on Winamp
+  5.5 and later. Title, artist, album, album artist, year, genre, comment,
+  track, disc, composer, publisher, BPM, ISRC and the other fields Winamp knows
+  about are written back to the OpusTags header: the file is rewritten in
+  place, the audio packets are left untouched, and every field that was not
+  edited (including the embedded cover art and the vendor string) is kept byte
+  for byte.
+
+* NEW: The cover art embedded in an Opus file is displayed by Winamp itself
+  now: the Album Art window and the artwork pane of the "File info" dialog show
+  it, and the artwork can be replaced ("Change..."/"Load Artwork...") or
+  removed ("Delete") from that dialog. To do that the plug-in registers an
+  album art provider with Winamp's service manager, which needs Winamp 5.12 or
+  later.
+
+* NEW: The plug-in's own info box (UNIFIED_DIALOG=0) now lists every Vorbis
+  comment instead of only the handful it used to show, and displays the
+  embedded cover art.
+
+* NEW: More metadata reaches Winamp's own displays. ALBUMARTIST, ARTISTS,
+  TRACKTOTAL/TOTALTRACKS, DISCNUMBER/TOTALDISCS, LABEL/PUBLISHER, LYRICS,
+  ENCODER and the other common spellings are resolved for the playlist
+  formatting, the media library and the file info dialog.
+
+* FIXED: "comment" now prefers the COMMENT field and falls back to
+  DESCRIPTION, which is what youtube-dl writes.
 
 == UPDATE 0.914 ==
 * Fix UTF8 to UTF16 conversion #14
@@ -480,7 +512,7 @@ and unnecessary for my case as I never encountered HTTPS radio streams.
 * NEW: Unicode is now supported under Windows NT OSes serie. Under Win98 you
   will still be limited to ANSI. An option was added to select the desired
   mode: TAGS_DISPLAY_MODE. Set it to 0 to dump the raw utf8 string in the
-  dialog, hence the character '�' will be displayed as 'é', not very nice.
+  dialog, hence the character '�' will be displayed as 'é', not very nice.
   Set it to 1 to force the UTF8 -> ANSI conversion and set it to 2 to force
   the Full Unicode support (UTF-8 -> UTF16). this requires NT. by default the
   value is 3 meaning the program will automatically use full Unicode support

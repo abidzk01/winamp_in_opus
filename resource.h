@@ -39,5 +39,7 @@
 #define IDC_PERFORMER                   2043
 #define IDC_COPYRIGHT                   2044
 #define IDC_TRACKTOTAL                  2045
+#define IDC_COVER                       2046
+#define IDC_EXTRATAGS                   2047
 
 // Next default values for new objects
