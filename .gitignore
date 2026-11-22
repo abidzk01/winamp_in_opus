@@ -19,6 +19,7 @@
 /logg/
 /opus/
 /ogg/
+/.deps/
 libopus*.a
 obj/
 build/
