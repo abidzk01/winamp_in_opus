@@ -57,6 +57,7 @@ char UNICODE_FILE;
 char TARGET_LUFS;
 char USE_REPLAY_GAIN=0; // 0 : no, 1: Album, 2: Track.
 char UNIFIED_DIALOG;
+char ART_LOG=0; // 1: log what Winamp asks the album art provider (support)
 HFONT TAGS_FONT=NULL;
 
 static OggOpusFile *_of=NULL;
@@ -92,7 +93,7 @@ BOOL WINAPI DllMain(HANDLE hInst, ULONG reason_for_call, LPVOID lpReserved)
 void config(HWND hwndParent)
 {
     int font_height;
-    char monstring[1024];
+    char monstring[1280];
     char font_str[LF_FACESIZE];
 
     // To read the config so we show up to date data
@@ -112,7 +113,8 @@ void config(HWND hwndParent)
         "OUT_SAMPLERATE=%d\n"
         "OUT_BITS=%d\n"
         "INTERNAL_VOLUME=%d\n"
-        "TARGET_LUFS=%d\n\n"
+        "TARGET_LUFS=%d\n"
+        "ART_LOG=%d\n\n"
 
         "USE_REPLAY_GAIN values:\n"
         "0: Disable (default), 1: Album gain 2: Track gain \n"
@@ -126,7 +128,7 @@ void config(HWND hwndParent)
 
         , USE_REPLAY_GAIN, ((float)PRE_GAIN)/256.F, ((float)RADIO_GAIN)/256.F
         , TAGS_DISPLAY_MODE, font_height, font_str, SAMPLERATE, BPS
-        , INTERNAL_VOLUME, TARGET_LUFS
+        , INTERNAL_VOLUME, TARGET_LUFS, ART_LOG
     );
     MessageBox(hwndParent, monstring, "This is not the configuration you are looking for", MB_OK);
 }
@@ -204,6 +206,7 @@ static void readconfig(char *ini_name, char *rez, char *font_str, int *font_heig
     UNIFIED_DIALOG   =GetPrivateProfileInt("IN_OPUS", "UNIFIED_DIALOG", UNIFIED_DIALOG, ini_name);
     INSTANT_BR       =GetPrivateProfileInt("IN_OPUS", "INSTANT_BR", INSTANT_BR, ini_name);
     FORMAT_TITLE     =GetPrivateProfileInt("IN_OPUS", "FORMAT_TITLE", FORMAT_TITLE, ini_name);
+    ART_LOG          =GetPrivateProfileInt("IN_OPUS", "ART_LOG", ART_LOG, ini_name);
 
     if(BPS!=8 && BPS!=24 && BPS!=32) BPS=16;
 
@@ -311,24 +314,27 @@ void init()
     ini_name[0] = rez[0] = font_str[0] = '\0';
 
     VIS_BROKEN=1;
-    albumart_register(mod.hMainWindow);   // cover art in Winamp's own UI
     winamp_version = SendMessage(mod.hMainWindow, WM_WA_IPC, 0, IPC_GETVERSION);
 
     if(winamp_version >= 0x5011){
         if(winamp_version >= 0x5012) VIS_BROKEN=0; // Winamp 5.12 allows 24/32b visualisation.
         // this gets the string of the full ini file path
         char *newini = (char *)SendMessage(mod.hMainWindow, WM_WA_IPC, 0, IPC_GETINIFILE);
-        if(!newini) return;
-        lstrcpy_sA(ini_name, countof(ini_name), newini);
+        if(newini){
+            lstrcpy_sA(ini_name, countof(ini_name), newini);
 
-        // Lastfn here contains the winamp.ini path, we read the file only if
-        // we have not read it already.
-        if(_stricmp(lastfn, ini_name)){
-            if(VERBOSE)MessageBox(NULL, ini_name,"in_opus: Winamp ini_name bis",MB_OK);
-            readconfig(ini_name, rez, font_str, &font_height); //winamp.ini
-            applyglobalfont(font_str, font_height);
+            // Lastfn here contains the winamp.ini path, we read the file only if
+            // we have not read it already.
+            if(_stricmp(lastfn, ini_name)){
+                if(VERBOSE)MessageBox(NULL, ini_name,"in_opus: Winamp ini_name bis",MB_OK);
+                readconfig(ini_name, rez, font_str, &font_height); //winamp.ini
+                applyglobalfont(font_str, font_height);
+            }
         }
     }
+
+    // After the options are read, so that ART_LOG already applies to it.
+    albumart_register(mod.hMainWindow);   // cover art in Winamp's own UI
 }
 
 char *ffilestart(const char *str)

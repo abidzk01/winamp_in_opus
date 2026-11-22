@@ -120,6 +120,7 @@ OGGEXT_HACK=0                ; 1/0 Hack for .ogg extension on/off (default 0)
 UNIFIED_DIALOG=1             ; Toggles Winamp 5.5+ unified dialog on Alt+3
 INSTANT_BR=1                 ; Enables instant bitrate display (default 1)
 FORMAT_TITLE=1               ; Uses "Artist - Title" format in the playlist
+ART_LOG=0                    ; 1 appends album art requests to %TEMP%\in_opus_art.log
 
 Set USE_REPLAY_GAIN=1 to use Album gain and set it to 2 for track gain,
 or 0 to disable replay gain (default). You can set it to 3 to use auto-

@@ -26,28 +26,35 @@
 #include "tagwrite.h"
 #include "wa_ipc.h"
 
-#ifdef ART_DEBUG
-#include <stdarg.h>
-static void alog(const char *fmt, ...)
+/* Diagnostics. Set ART_LOG=1 in the [IN_OPUS] section of winamp.ini (or the
+   plug-in's own ini) to have the provider append what Winamp asks for to
+   %TEMP%\in_opus_art.log; that is the quickest way to find out whether the
+   album art service of a particular Winamp build talks to the provider. */
+extern char ART_LOG;
+
+static void alog_write(const char *line)
 {
-    char path[MAX_PATH], line[1024];
-    va_list ap;
-    FILE *f;
+    char path[MAX_PATH];
     DWORD n = GetTempPathA(MAX_PATH, path);
+    FILE *f;
+
     if (n == 0 || n > MAX_PATH - 24) return;
     strcat(path, "in_opus_art.log");
     f = fopen(path, "a");
     if (!f) return;
-    va_start(ap, fmt);
-    vsnprintf(line, sizeof(line), fmt, ap);
-    va_end(ap);
     fprintf(f, "%s\n", line);
     fclose(f);
 }
-#define ALOG(...) alog(__VA_ARGS__)
-#else
-#define ALOG(...) ((void)0)
-#endif
+
+/* No side effects inside ALOG: it is compiled away when ART_LOG is 0. */
+#define ALOG(...)                                                       \
+    do {                                                                \
+        if (ART_LOG) {                                                  \
+            char alog_buf_[512];                                        \
+            sprintf(alog_buf_, __VA_ARGS__);                            \
+            alog_write(alog_buf_);                                      \
+        }                                                               \
+    } while (0)
 wchar_t *utf8_to_utf16(const char *utfs);   /* utf_ansi.c */
 char *utf16_to_utf8(const wchar_t *in);     /* utf_ansi.c */
 
@@ -522,8 +529,8 @@ void albumart_register(HWND winamp)
     g_factory_object.vtbl = factory_vtbl;
 
     ALOG("memmgr factory=%p interface=%p", factory, g_memmgr);
-    {   /* never put the registration inside ALOG: it compiles away when the
-           debug build is off */
+    {   /* never put the registration inside ALOG: it compiles away when
+           ART_LOG is 0 */
         int r = svc_register(svc, &g_factory_object);
         ALOG("service_register(factory=%p) -> %d", (void *)&g_factory_object, r);
         (void)r;
