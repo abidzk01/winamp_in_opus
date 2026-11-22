@@ -1,0 +1,39 @@
+# Build artifacts (never commit these)
+*.o
+*.obj
+*.res
+*.a
+*.lib
+*.dll
+*.exe
+*.exp
+*.d
+*.map
+*.pdb
+*.ilk
+
+# Local build trees for the external libraries (libopus / libogg)
+# The makefiles expect these beside the sources; they are not part of the repo.
+/oflto/
+/oflto152/
+/logg/
+/opus/
+libopus*.a
+obj/
+build/
+dist/
+
+# Local runtime configuration for the plugin / host player
+in_opus.ini
+winamp.ini
+*.log
+
+# Editors, IDEs and OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+desktop.ini
