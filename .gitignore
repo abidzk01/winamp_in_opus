@@ -18,6 +18,7 @@
 /oflto152/
 /logg/
 /opus/
+/ogg/
 libopus*.a
 obj/
 build/
