@@ -1,5 +1,5 @@
  /-------------------------------------------------------------------------\
-/              OPUS FILE DECODER PLUGIN FOR WINAMP 2+ (V0.915)              \
+/              OPUS FILE DECODER PLUGIN FOR WINAMP 2+ (V0.916)              \
 |                        RELEASED NOVEMBER 22, 2026                        |
 +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 | Author: Raymond Gillibert.                                                |
@@ -240,6 +240,21 @@ FORMAT_TITLE=0 then only the filename willbe displayed in the playmist.
 =============================================================================
 == CHANGELOG                                                               ==
 =============================================================================
+
+== UPDATE 0.916 ==
+
+* FIXED: The cover art embedded in Opus files is now visible in Winamp's Album
+  Art window and in the artwork pane of the "File info" dialog. Some Winamp
+  builds (5.9.2 among them) ask the album art provider for the picture and then
+  only display artwork they can find as a file next to the track, so the plug-in
+  now also writes the embedded picture to "cover.jpg" in the same folder.
+  Nothing is ever overwritten or deleted, and a folder that cannot be written to
+  is simply skipped. Set EXTRACT_COVER=0 in the [IN_OPUS] section to keep the
+  plug-in from writing any file; it still offers the picture to Winamp's album
+  art service, which players that support it use directly.
+
+* NEW: ART_LOG=1 in the [IN_OPUS] section appends what Winamp asks the album art
+  service to "%TEMP%\in_opus_art.log", to diagnose a cover that does not show.
 
 == UPDATE 0.915 ==
 
