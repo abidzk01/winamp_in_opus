@@ -121,6 +121,7 @@ UNIFIED_DIALOG=1             ; Toggles Winamp 5.5+ unified dialog on Alt+3
 INSTANT_BR=1                 ; Enables instant bitrate display (default 1)
 FORMAT_TITLE=1               ; Uses "Artist - Title" format in the playlist
 ART_LOG=0                    ; 1 appends album art requests to %TEMP%\in_opus_art.log
+EXTRACT_COVER=1              ; 1 writes the embedded cover as cover.jpg beside the file
 
 Set USE_REPLAY_GAIN=1 to use Album gain and set it to 2 for track gain,
 or 0 to disable replay gain (default). You can set it to 3 to use auto-
@@ -219,6 +220,18 @@ by default.
 INSTANT_BR allows you to enable (1) or disable (0) instant bitrate display in
 the winamp windows, default is enabled but you may prefer to see the average
 bitrate that will be displayed when this option is set to zero.
+
+EXTRACT_COVER, when set to 1 (default), writes the cover art that is embedded in
+an Opus file to "cover.jpg" in the same folder, unless a cover file (cover,
+folder, album, front, thumb, as .jpg or .png) is already there. Nothing is ever
+overwritten or deleted. This exists because the album art window of some Winamp
+builds only displays artwork that it can find as a file next to the track; the
+plug-in also hands the same artwork to Winamp's album art service, which players
+that support it use directly. Set it to 0 to never write files.
+
+ART_LOG set to 1 makes the plug-in append what Winamp asks the album art service
+to "%TEMP%\in_opus_art.log", which helps to diagnose why a cover is not shown.
+Default is 0: no logging.
 
 FORMAT_TITLE Only applies to Winamp 2.x and allows you to enable "proper"
 display of the playlist entry in the "Artist - Title" format. If you set

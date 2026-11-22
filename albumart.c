@@ -46,6 +46,15 @@ static void alog_write(const char *line)
     fclose(f);
 }
 
+/* Diagnostics. ART_MODE selects alternative implementations so that a Winamp
+   build which refuses the art can be narrowed down without rebuilding:
+     0 (default) provider type EMBEDDED, bits and mime from the memory manager
+     1           report the provider type as FOLDER
+     2           leave the mime type unset
+     4           allocate the bits with malloc
+   Like ART_LOG this is a troubleshooting switch, not something to configure. */
+extern char ART_MODE;
+
 /* No side effects inside ALOG: it is compiled away when ART_LOG is 0. */
 #define ALOG(...)                                                       \
     do {                                                                \
@@ -212,6 +221,84 @@ static wchar_t *alloc_mime(const char *mime)
     return w;
 }
 
+/* Optional workaround for Winamp builds whose album art window only shows art
+   it can find as a file: when EXTRACT_COVER=1 is set in the [IN_OPUS] section,
+   the embedded picture is also written next to the audio file as cover.jpg (or
+   .png/.gif), unless a cover file is already there. */
+extern char EXTRACT_COVER;
+
+static void extract_cover(const wchar_t *fnw, const void *data, size_t len, const char *mime)
+{
+    static const char *const NAMES[] = {
+        "cover", "folder", "album", "front", "cover_art", "thumb"
+    };
+    const char *ext = ".jpg";
+    const char *slash;
+    char *fn8, *dir, *target;
+    FILE *probe, *f;
+    size_t i;
+
+    if (!EXTRACT_COVER || !fnw || !data || !len) return;
+    if (mime && !_stricmp(mime, "image/png")) ext = ".png";
+    else if (mime && !_stricmp(mime, "image/gif")) ext = ".gif";
+
+    fn8 = utf16_to_utf8(fnw);
+    if (!fn8) return;
+    slash = strrchr(fn8, '\\');
+    if (!slash) slash = strrchr(fn8, '/');
+    if (!slash) {
+        free(fn8);
+        return;
+    }
+    dir = (char *)malloc((size_t)(slash - fn8) + 1);
+    if (!dir) {
+        free(fn8);
+        return;
+    }
+    memcpy(dir, fn8, (size_t)(slash - fn8));
+    dir[slash - fn8] = 0;
+    free(fn8);
+
+    target = (char *)malloc(strlen(dir) + 24);
+    if (!target) {
+        free(dir);
+        return;
+    }
+    for (i = 0; i < sizeof(NAMES) / sizeof(NAMES[0]); i++) {
+        /* any of the names Winamp itself looks for counts as "art present" */
+        sprintf(target, "%s\\%s.jpg", dir, NAMES[i]);
+        probe = opus_open_file(target, "rb");
+        if (probe) {
+            fclose(probe);
+            free(target);
+            free(dir);
+            return;
+        }
+        sprintf(target, "%s\\%s.png", dir, NAMES[i]);
+        probe = opus_open_file(target, "rb");
+        if (probe) {
+            fclose(probe);
+            free(target);
+            free(dir);
+            return;
+        }
+    }
+
+    sprintf(target, "%s\\cover%s", dir, ext);
+    free(dir);
+    f = opus_open_file(target, "wb");
+    if (f) {
+        if (fwrite(data, 1, len, f) != len) {
+            fclose(f);
+            remove(target);
+        } else {
+            fclose(f);
+            ALOG("extract_cover: wrote %s", target);
+        }
+    }
+    free(target);
+}
+
 /* Hands back the picture data for the requested type, preferred order:
    the requested type, then the front cover, then whatever is stored. */
 static int load_art(const wchar_t *fnw, const wchar_t *type,
@@ -255,14 +342,15 @@ static int load_art(const wchar_t *fnw, const wchar_t *type,
             if (opus_picture_tag_parse(&pic, tag) >= 0
                 && (looking_for < 0 || (int)pic.type == looking_for)
                 && pic.data && pic.data_length) {
-                void *copy = art_alloc(pic.data_length);
-                wchar_t *wmime = alloc_mime(pic.mime_type);
-                if (copy && wmime) {
+                void *copy = (ART_MODE & 4) ? malloc(pic.data_length) : art_alloc(pic.data_length);
+                wchar_t *wmime = (ART_MODE & 2) ? NULL : alloc_mime(pic.mime_type);
+                if (copy && (wmime || (ART_MODE & 2))) {
                     memcpy(copy, pic.data, pic.data_length);
                     *bits = copy;
                     *len = pic.data_length;
                     *mime = wmime;
                     ok = 1;
+                    extract_cover(fnw, copy, pic.data_length, pic.mime_type);
                 }
             }
             opus_picture_tag_clear(&pic);
@@ -412,7 +500,7 @@ static int __attribute__((thiscall)) provider_dispatch(void *self, int msg,
     ALOG("provider_dispatch msg=%d", msg);
     switch (msg) {
     case AAP_PROVIDERTYPE:
-        if (retval) *(int *)retval = AAP_TYPE_EMBEDDED;
+        if (retval) *(int *)retval = (ART_MODE & 1) ? 2 : AAP_TYPE_EMBEDDED;
         return 1;
 
     case AAP_ISMINE:

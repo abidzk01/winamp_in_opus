@@ -58,6 +58,8 @@ char TARGET_LUFS;
 char USE_REPLAY_GAIN=0; // 0 : no, 1: Album, 2: Track.
 char UNIFIED_DIALOG;
 char ART_LOG=0; // 1: log what Winamp asks the album art provider (support)
+char ART_MODE=0; // album art troubleshooting switch, see albumart.c
+char EXTRACT_COVER=1; // 1: also write the embedded cover as cover.jpg beside the file
 HFONT TAGS_FONT=NULL;
 
 static OggOpusFile *_of=NULL;
@@ -114,7 +116,8 @@ void config(HWND hwndParent)
         "OUT_BITS=%d\n"
         "INTERNAL_VOLUME=%d\n"
         "TARGET_LUFS=%d\n"
-        "ART_LOG=%d\n\n"
+        "ART_LOG=%d\n"
+        "EXTRACT_COVER=%d\n\n"
 
         "USE_REPLAY_GAIN values:\n"
         "0: Disable (default), 1: Album gain 2: Track gain \n"
@@ -128,7 +131,7 @@ void config(HWND hwndParent)
 
         , USE_REPLAY_GAIN, ((float)PRE_GAIN)/256.F, ((float)RADIO_GAIN)/256.F
         , TAGS_DISPLAY_MODE, font_height, font_str, SAMPLERATE, BPS
-        , INTERNAL_VOLUME, TARGET_LUFS, ART_LOG
+        , INTERNAL_VOLUME, TARGET_LUFS, ART_LOG, EXTRACT_COVER
     );
     MessageBox(hwndParent, monstring, "This is not the configuration you are looking for", MB_OK);
 }
@@ -207,6 +210,8 @@ static void readconfig(char *ini_name, char *rez, char *font_str, int *font_heig
     INSTANT_BR       =GetPrivateProfileInt("IN_OPUS", "INSTANT_BR", INSTANT_BR, ini_name);
     FORMAT_TITLE     =GetPrivateProfileInt("IN_OPUS", "FORMAT_TITLE", FORMAT_TITLE, ini_name);
     ART_LOG          =GetPrivateProfileInt("IN_OPUS", "ART_LOG", ART_LOG, ini_name);
+    ART_MODE         =GetPrivateProfileInt("IN_OPUS", "ART_MODE", ART_MODE, ini_name);
+    EXTRACT_COVER    =GetPrivateProfileInt("IN_OPUS", "EXTRACT_COVER", EXTRACT_COVER, ini_name);
 
     if(BPS!=8 && BPS!=24 && BPS!=32) BPS=16;
 

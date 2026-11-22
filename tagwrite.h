@@ -1,6 +1,8 @@
 #ifndef TAGWRITE_H
 #define TAGWRITE_H
 
+#include <stdio.h>
+
 /* One pending tag change.
  * key is a Vorbis comment field name (compared case-insensitively).
  * val is the new UTF-8 value; NULL or "" deletes every field with that key.
@@ -21,5 +23,8 @@ typedef struct {
  * is returned.
  */
 int opus_write_tags(const char *fn8, const OpusTagEdit *edits, int n_edits);
+
+/* fopen() for a name that may only be representable through the wide API. */
+FILE *opus_open_file(const char *name8, const char *mode);
 
 #endif

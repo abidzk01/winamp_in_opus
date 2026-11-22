@@ -120,7 +120,7 @@ static char *name_with_ext(const char *name, const char *ext)
 
 /* fopen() that also copes with names the ANSI code page cannot express. This
    follows opusfile/stream.c, which does the same for playback. */
-static FILE *open_file(const char *name, const char *mode)
+FILE *opus_open_file(const char *name, const char *mode)
 {
     FILE *fp = fopen(name, mode);
 
@@ -143,7 +143,7 @@ static FILE *open_file(const char *name, const char *mode)
 }
 
 /* rename()/remove() that also cope with names the ANSI code page cannot
-   express, using the same msvcrt fallback as open_file(). */
+   express, using the same msvcrt fallback as opus_open_file(). */
 static int remove_unicode(const char *name)
 {
     HINSTANCE hMsvcrtDll;
@@ -553,9 +553,9 @@ int opus_write_tags(const char *fn8, const OpusTagEdit *edits, int n_edits)
     bakname = name_with_ext(fn8, ".bak");
     if (!hdr || !body || !tmpname || !bakname) goto cleanup;
 
-    in = open_file(fn8, "rb");
+    in = opus_open_file(fn8, "rb");
     if (!in) goto cleanup;
-    out = open_file(tmpname, "wb");
+    out = opus_open_file(tmpname, "wb");
     if (!out) goto cleanup;
 
     /**** collect the two header packets, page by page ****/
