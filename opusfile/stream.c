@@ -26,6 +26,7 @@
 #include <string.h>
 #if defined(_WIN32)
 # include <io.h>
+# include <fcntl.h>
 #include <windows.h>
 #endif
 
@@ -147,7 +148,41 @@ void *op_fopen(OpusFileCallbacks *_cb,const char *_path,const char *_mode)
   FILE *fp=NULL;
   if(!_path || !_mode || *_path == '\0' || *_mode == '\0') return NULL;
 
-  fp=fopen(_path,_mode); // 1st try to open ANSI
+  /*Read modes are opened through CreateFile so that the file keeps working
+    after it has been renamed or deleted: the plug-in's tag writer replaces the
+    file to update the tags of the track that is currently playing.*/
+  if(_mode[0]=='r'){
+    HANDLE hFile;
+    hFile=CreateFileA(_path,GENERIC_READ,
+     FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,0,NULL);
+    if(hFile==INVALID_HANDLE_VALUE){
+      /*CreateFileW is not available on Windows 95/98, so resolve it at run time.*/
+      static HANDLE (WINAPI *my_CreateFileW)(LPCWSTR,DWORD,DWORD,LPSECURITY_ATTRIBUTES,
+       DWORD,DWORD,HANDLE);
+      HINSTANCE hKernel=GetModuleHandleA("KERNEL32.DLL");
+      if(hKernel){
+        if(!my_CreateFileW){
+          my_CreateFileW=(HANDLE (WINAPI *)(LPCWSTR,DWORD,DWORD,LPSECURITY_ATTRIBUTES,
+           DWORD,DWORD,HANDLE))(void *)GetProcAddress(hKernel,"CreateFileW");
+        }
+        if(my_CreateFileW){
+          wchar_t *wpath=utf8_to_utf16(_path);
+          if(wpath){
+            hFile=my_CreateFileW(wpath,GENERIC_READ,
+             FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,0,NULL);
+            free(wpath);
+          }
+        }
+      }
+    }
+    if(hFile!=INVALID_HANDLE_VALUE){
+      int fd=_open_osfhandle((intptr_t)hFile,_O_RDONLY|_O_BINARY);
+      if(fd==-1)CloseHandle(hFile);
+      else fp=_fdopen(fd,"rb");
+    }
+  }
+
+  if(!fp)fp=fopen(_path,_mode); // 1st try to open ANSI
 
   if(!fp){ // If it does not work then try unicode.
     wchar_t *wpath;
