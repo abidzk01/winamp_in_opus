@@ -398,7 +398,7 @@ void quit()
 
 /////////////////////////////////////////////////////////////////////////////
 // Used for detecting URL streams...
-int isourfile(const char *const fn)
+int isourfile(char *fn)
 {
     int err = -132;
     int ret=0;

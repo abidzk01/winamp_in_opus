@@ -9,7 +9,7 @@ const char *TranslateOpusErr(int err);
 char isURL(const char *const fn);
 char isRGavailable(const OggOpusFile *_of);
 char *ffilestart(const char *str);
-int isourfile(const char *const fn);
+int isourfile(char *fn);
 
 void lstrcpy_sA(char *__restrict__ dest, size_t N, const char *src);
 void lstrcpy_sW(wchar_t *__restrict__ dest, size_t N, const wchar_t *src);
